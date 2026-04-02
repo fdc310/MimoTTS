@@ -42,6 +42,15 @@ class TTS(Command):
         await super().initialize()
 
         @self.subcommand(
+            name="",
+            help="显示帮助信息",
+            usage="!tts",
+            aliases=[],
+        )
+        async def tts_root(self, context: ExecuteContext) -> AsyncGenerator[CommandReturn, None]:
+            yield CommandReturn(text=HELP_TEXT)
+
+        @self.subcommand(
             name="key",
             help="设置或清除 MiMo API Key",
             usage="!tts key <API Key>",
@@ -77,16 +86,12 @@ class TTS(Command):
             yield CommandReturn(text=f"API Key 已设置：{masked}")
 
         @self.subcommand(
-            name="",
+            name="*",
             help="将文本转换为语音（使用默认配置）",
             usage="!tts <文本>",
             aliases=["说", "say"],
         )
         async def tts_default(self, context: ExecuteContext) -> AsyncGenerator[CommandReturn, None]:
-            if not context.crt_params:
-                yield CommandReturn(text=HELP_TEXT)
-                return
-
             api_key = await get_api_key(self.plugin)
             if not api_key:
                 yield CommandReturn(text="请先设置 API Key：!tts key <你的Key>")

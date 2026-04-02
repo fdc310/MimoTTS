@@ -24,7 +24,7 @@ async def get_api_key(plugin: Any) -> str:
     except BaseException:
         pass
     # 回退到 WebUI 配置
-    return plugin.get_config().get("api_key", "")
+    return plugin.get_config().get("api_key") or ""
 
 
 async def call_mimo_tts(api_key: str, text: str, voice: str) -> bytes | None:

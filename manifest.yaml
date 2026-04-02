@@ -35,7 +35,17 @@ spec:
       description:
         en_US: Automatically convert LLM responses to speech
         zh_Hans: 自动将 LLM 回复转换为语音发送
-      default: false
+      default: true
+      required: false
+    - name: block_text_reply
+      type: boolean
+      label:
+        en_US: Block Text Reply
+        zh_Hans: 拦截文字回复
+      description:
+        en_US: Block original text reply and only send voice. Turn off to send both text and voice.
+        zh_Hans: 拦截原始文字回复，只发送语音。关闭则同时发送文字和语音。
+      default: true
       required: false
     - name: llm_model
       type: llm-model-selector
