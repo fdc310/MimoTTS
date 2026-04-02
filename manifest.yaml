@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Plugin
+metadata:
+  author: Mimotts
+  name: MimoTTS
+  repository: ''
+  version: 0.1.0
+  description:
+    en_US: 'Text-to-speech synthesis using MiMo TTS API'
+    zh_Hans: '调用小米 MiMo TTS 生成语音'
+  label:
+    en_US: MimoTTS
+    zh_Hans: MimoTTS
+    th_TH: MimoTTS
+    vi_VN: MimoTTS
+    es_ES: MimoTTS
+  icon: assets/icon.svg  # replace in assets/icon.svg
+spec:
+  config:
+    - name: api_key
+      type: string
+      label:
+        en_US: MiMo API Key
+        zh_Hans: MiMo API Key
+      description:
+        en_US: MiMo TTS API Key from api.xiaomimimo.com. Can also be set via !tts key command.
+        zh_Hans: 从 api.xiaomimimo.com 获取的 API Key，也可通过 !tts key 命令设置
+      required: false
+      default: ''
+    - name: enable_auto_tts
+      type: boolean
+      label:
+        en_US: Enable Auto TTS
+        zh_Hans: 启用自动语音合成
+      description:
+        en_US: Automatically convert LLM responses to speech
+        zh_Hans: 自动将 LLM 回复转换为语音发送
+      default: false
+      required: false
+    - name: llm_model
+      type: llm-model-selector
+      label:
+        en_US: Text Processing LLM
+        zh_Hans: 文本加工 LLM 模型
+      description:
+        en_US: LLM model for processing response text before TTS (style analysis, text cleanup). Leave empty to skip LLM processing.
+        zh_Hans: 用于加工回复文本的 LLM 模型（风格分析、文本清理）。留空则跳过 LLM 加工，直接合成。
+      required: false
+    - name: default_voice
+      type: select
+      label:
+        en_US: Default Voice
+        zh_Hans: 默认音色
+      description:
+        en_US: Default voice for speech synthesis
+        zh_Hans: 默认语音合成音色
+      options:
+        - name: mimo_default
+          label:
+            en_US: MiMo Default
+            zh_Hans: MiMo 默认
+        - name: default_zh
+          label:
+            en_US: Chinese Female
+            zh_Hans: 中文女声
+        - name: default_en
+          label:
+            en_US: English Female
+            zh_Hans: 英文女声
+      default: mimo_default
+      required: false
+    - name: default_style
+      type: string
+      label:
+        en_US: Default Style
+        zh_Hans: 默认风格
+      description:
+        en_US: 'Default style tag when LLM model is not configured. e.g.: 开心, 悲伤, 东北话. Leave empty for none.'
+        zh_Hans: '未配置 LLM 模型时的默认语音风格，如：开心、悲伤、东北话，留空表示不使用'
+      default: ''
+      required: false
+  components:
+    EventListener:
+      fromDirs:
+        - path: components/event_listener/
+    Command:
+      fromDirs:
+        - path: components/commands/
+execution:
+  python:
+    path: main.py
+    attr: MimoTTS

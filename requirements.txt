@@ -1,0 +1,2 @@
+langbot-plugin
+openai>=1.0.0
