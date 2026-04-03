@@ -98,35 +98,6 @@ class DefaultEventListener(EventListener):
                 return
             await _do_tts(self, event_context, response_text)
 
-        @self.handler(events.PersonMessageReceived)
-        async def on_person_all(event_context: context.EventContext):
-            """监听所有私聊消息，拦截其他插件设置的 reply_message_chain"""
-            await _check_reply_chain(self, event_context)
-
-        @self.handler(events.GroupMessageReceived)
-        async def on_group_all(event_context: context.EventContext):
-            """监听所有群消息，拦截其他插件设置的 reply_message_chain"""
-            await _check_reply_chain(self, event_context)
-
-
-async def _check_reply_chain(listener: DefaultEventListener, event_context: context.EventContext):
-    """检查其他插件是否设置了 reply_message_chain，提取文本做 TTS"""
-    reply_chain = getattr(event_context.event, "reply_message_chain", None)
-    if not reply_chain:
-        return
-
-    # 提取消息链中的纯文本
-    text_parts = []
-    for element in reply_chain:
-        if isinstance(element, platform_message.Plain):
-            text_parts.append(element.text)
-    text = "".join(text_parts).strip()
-    if not text:
-        return
-
-    logger.info(f"[MimoTTS] 检测到其他插件回复，文本: {text[:80]}...")
-    await _do_tts(listener, event_context, text)
-
 
 async def _do_tts(
     listener: DefaultEventListener,
@@ -171,15 +142,19 @@ async def _do_tts(
         pass
 
     # 文本加工
+    default_style = config.get("default_style") or ""
     if llm_model_uuid:
         tts_text = await _process_text_with_llm(
             listener.plugin, llm_model_uuid, user_text, response_text
         )
+        # LLM 加工模型自身也可能输出思维链，再清理一次
+        tts_text = _strip_thinking(tts_text)
     else:
         tts_text = _fallback_clean(response_text)
-        default_style = config.get("default_style") or ""
-        if default_style:
-            tts_text = f"<style>{default_style}</style>{tts_text}"
+
+    # 统一注入语言口音/方言风格
+    if default_style:
+        tts_text = _inject_style(tts_text, default_style)
 
     if not tts_text.strip():
         return
@@ -219,6 +194,21 @@ def _strip_thinking(text: str) -> str:
     return text.strip()
 
 
+def _inject_style(text: str, extra_style: str) -> str:
+    """将口音/方言风格追加到已有的 <style> 标签中，如果没有则新建"""
+    match = re.match(r"^<style>(.*?)</style>", text)
+    if match:
+        existing = match.group(1).strip()
+        # 避免重复追加
+        if extra_style not in existing:
+            combined = f"{existing} {extra_style}"
+        else:
+            combined = existing
+        return f"<style>{combined}</style>{text[match.end():]}"
+    else:
+        return f"<style>{extra_style}</style>{text}"
+
+
 async def _process_text_with_llm(
     plugin: Any, llm_model_uuid: str, user_text: str, response_text: str
 ) -> str:
@@ -239,8 +229,8 @@ async def _process_text_with_llm(
             logger.info(f"[MimoTTS] LLM 加工完成，长度: {len(result)}")
             return result.strip()
 
-    except Exception as e:
-        logger.error(f"[MimoTTS] LLM 加工失败: {e}")
+    except BaseException as e:
+        logger.warning(f"[MimoTTS] LLM 加工失败（{type(e).__name__}），使用规则引擎回退: {e}")
 
     return _fallback_clean(response_text)
 

@@ -82,11 +82,11 @@ spec:
     - name: default_style
       type: string
       label:
-        en_US: Default Style
-        zh_Hans: 默认风格
+        en_US: Voice Accent / Dialect
+        zh_Hans: 语言风格/口音
       description:
-        en_US: 'Default style tag when LLM model is not configured. e.g.: 开心, 悲伤, 东北话. Leave empty for none.'
-        zh_Hans: '未配置 LLM 模型时的默认语音风格，如：开心、悲伤、东北话，留空表示不使用'
+        en_US: 'Voice accent or dialect, will be appended to style tag. e.g.: 东北话, 台湾腔, 四川话, 粤语. Leave empty for none.'
+        zh_Hans: '语言口音或方言风格，会追加到 style 标签中。如：东北话、台湾腔、四川话、粤语，留空表示不使用'
       default: ''
       required: false
   components:
