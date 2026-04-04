@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 from typing import AsyncGenerator
 
 from langbot_plugin.api.definition.components.command.command import Command
 from langbot_plugin.api.entities.builtin.command.context import ExecuteContext, CommandReturn
 from langbot_plugin.api.entities.builtin.platform import message as platform_message
-from components.tts_utils import call_mimo_tts, get_api_key, STORAGE_KEY_API
+from components.tts_utils import call_mimo_tts
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,6 @@ HELP_TEXT = (
     "  !tts <文本>                   - 默认音色合成\n"
     "  !tts voice <音色> <文本>      - 指定音色\n"
     "  !tts style <风格> <文本>      - 指定风格\n"
-    "  !tts key <API Key>            - 设置 MiMo API Key\n"
-    "  !tts key clear                - 清除命令设置的 Key\n"
     "  !tts help                     - 显示帮助\n"
     "\n可用音色：\n"
     "  mimo_default  MiMo 默认\n"
@@ -34,6 +33,16 @@ HELP_TEXT = (
     "\n风格示例：开心、悲伤、生气、东北话、粤语、台湾腔\n"
     "也可在文本中使用标签：!tts <style>开心</style>你好"
 )
+
+
+def _apply_default_style(text: str, style: str) -> str:
+    """智能注入默认风格：已有 <style> 或唱歌内容不再拼"""
+    if not style:
+        return text
+    # 已有 <style> 标签，不重复添加
+    if re.match(r"^<style>", text):
+        return text
+    return f"<style>{style}</style>{text}"
 
 
 class TTS(Command):
@@ -51,61 +60,24 @@ class TTS(Command):
             yield CommandReturn(text=HELP_TEXT)
 
         @self.subcommand(
-            name="key",
-            help="设置或清除 MiMo API Key",
-            usage="!tts key <API Key>",
-            aliases=["k"],
-        )
-        async def tts_key(self, context: ExecuteContext) -> AsyncGenerator[CommandReturn, None]:
-            if not context.crt_params:
-                # 查看当前 key 状态
-                api_key = await get_api_key(self.plugin)
-                if api_key:
-                    masked = api_key[:4] + "****" + api_key[-4:] if len(api_key) > 8 else "****"
-                    yield CommandReturn(text=f"当前 API Key：{masked}\n用法：!tts key <新Key> 或 !tts key clear")
-                else:
-                    yield CommandReturn(text="API Key 未设置\n用法：!tts key <API Key>")
-                return
-
-            param = context.crt_params[0]
-
-            if param == "clear":
-                try:
-                    await self.plugin.delete_plugin_storage(STORAGE_KEY_API)
-                    logger.info("[MimoTTS] 已清除命令设置的 API Key")
-                    yield CommandReturn(text="已清除命令设置的 API Key，将使用 WebUI 配置的 Key")
-                except Exception:
-                    yield CommandReturn(text="清除失败或本就未设置")
-                return
-
-            # 设置新 key
-            new_key = param.strip()
-            await self.plugin.set_plugin_storage(STORAGE_KEY_API, new_key.encode("utf-8"))
-            masked = new_key[:4] + "****" + new_key[-4:] if len(new_key) > 8 else "****"
-            logger.info(f"[MimoTTS] API Key 已通过命令设置: {masked}")
-            yield CommandReturn(text=f"API Key 已设置：{masked}")
-
-        @self.subcommand(
             name="*",
             help="将文本转换为语音（使用默认配置）",
             usage="!tts <文本>",
             aliases=["说", "say"],
         )
         async def tts_default(self, context: ExecuteContext) -> AsyncGenerator[CommandReturn, None]:
-            api_key = await get_api_key(self.plugin)
+            config = self.plugin.get_config()
+            api_key = config.get("api_key") or ""
             if not api_key:
-                yield CommandReturn(text="请先设置 API Key：!tts key <你的Key>")
+                yield CommandReturn(text="请先在插件配置中填写 MiMo API Key")
                 return
 
-            config = self.plugin.get_config()
-            voice = config.get("default_voice", "mimo_default")
-            style = config.get("default_style", "")
+            voice = config.get("default_voice") or "mimo_default"
+            style = config.get("default_style") or ""
             text = " ".join(context.crt_params)
+            text = _apply_default_style(text, style)
 
-            if style:
-                text = f"<style>{style}</style>{text}"
-
-            logger.info(f"[MimoTTS] 命令合成，音色: {voice}，文本: {text[:50]}...")
+            logger.info(f"[MimoTTS] 命令合成，音色: {voice}，文本: {text[:80]}...")
             audio_data = await call_mimo_tts(api_key, text, voice)
             if audio_data is None:
                 yield CommandReturn(text="语音合成失败，请检查 API Key 和网络连接。")
@@ -117,8 +89,7 @@ class TTS(Command):
                     platform_message.Voice(url=data_url),
                 ])
             )
-            return
-            yield  # noqa: unreachable — makes this function an AsyncGenerator
+            yield CommandReturn()
 
         @self.subcommand(
             name="voice",
@@ -145,12 +116,13 @@ class TTS(Command):
                 )
                 return
 
-            api_key = await get_api_key(self.plugin)
+            config = self.plugin.get_config()
+            api_key = config.get("api_key") or ""
             if not api_key:
-                yield CommandReturn(text="请先设置 API Key：!tts key <你的Key>")
+                yield CommandReturn(text="请先在插件配置中填写 MiMo API Key")
                 return
 
-            logger.info(f"[MimoTTS] 命令合成，音色: {voice}，文本: {text[:50]}...")
+            logger.info(f"[MimoTTS] 命令合成，音色: {voice}，文本: {text[:80]}...")
             audio_data = await call_mimo_tts(api_key, text, voice)
             if audio_data is None:
                 yield CommandReturn(text="语音合成失败，请检查 API Key 和网络连接。")
@@ -162,8 +134,7 @@ class TTS(Command):
                     platform_message.Voice(url=data_url),
                 ])
             )
-            return
-            yield  # noqa: unreachable — makes this function an AsyncGenerator
+            yield CommandReturn()
 
         @self.subcommand(
             name="style",
@@ -182,15 +153,15 @@ class TTS(Command):
             text = " ".join(context.crt_params[1:])
             styled_text = f"<style>{style}</style>{text}"
 
-            api_key = await get_api_key(self.plugin)
+            config = self.plugin.get_config()
+            api_key = config.get("api_key") or ""
             if not api_key:
-                yield CommandReturn(text="请先设置 API Key：!tts key <你的Key>")
+                yield CommandReturn(text="请先在插件配置中填写 MiMo API Key")
                 return
 
-            config = self.plugin.get_config()
-            voice = config.get("default_voice", "mimo_default")
+            voice = config.get("default_voice") or "mimo_default"
 
-            logger.info(f"[MimoTTS] 命令合成，风格: {style}，文本: {text[:50]}...")
+            logger.info(f"[MimoTTS] 命令合成，风格: {style}，文本: {text[:80]}...")
             audio_data = await call_mimo_tts(api_key, styled_text, voice)
             if audio_data is None:
                 yield CommandReturn(text="语音合成失败，请检查 API Key 和网络连接。")
@@ -202,8 +173,7 @@ class TTS(Command):
                     platform_message.Voice(url=data_url),
                 ])
             )
-            return
-            yield  # noqa: unreachable — makes this function an AsyncGenerator
+            yield CommandReturn()
 
         @self.subcommand(
             name="help",

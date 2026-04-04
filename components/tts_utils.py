@@ -3,28 +3,10 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Any
 
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
-
-STORAGE_KEY_API = "mimo_tts_api_key"
-
-
-async def get_api_key(plugin: Any) -> str:
-    """获取 API Key：命令设置的优先，其次 WebUI 配置"""
-    # 优先从持久化存储读取（通过命令设置的）
-    try:
-        keys = await plugin.get_plugin_storage_keys()
-        if STORAGE_KEY_API in keys:
-            stored = await plugin.get_plugin_storage(STORAGE_KEY_API)
-            if stored:
-                return stored.decode("utf-8")
-    except BaseException:
-        pass
-    # 回退到 WebUI 配置
-    return plugin.get_config().get("api_key") or ""
 
 
 async def call_mimo_tts(api_key: str, text: str, voice: str) -> bytes | None:

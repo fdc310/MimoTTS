@@ -3,72 +3,49 @@ from __future__ import annotations
 import base64
 import logging
 import re
-from typing import Any
 
 from langbot_plugin.api.definition.components.common.event_listener import EventListener
 from langbot_plugin.api.entities import events, context
 from langbot_plugin.api.entities.builtin.platform import message as platform_message
 from langbot_plugin.api.entities.builtin.provider import message as provider_message
-from components.tts_utils import call_mimo_tts, get_api_key
+from components.tts_utils import call_mimo_tts
 
 logger = logging.getLogger(__name__)
 
 # LLM 提示词
-TTS_PROCESS_PROMPT = """你是一个 TTS 文本优化助手，负责将文本转换为 MiMo TTS 能生动朗读的格式。
+TTS_PROCESS_PROMPT = """你负责把AI回复转成自然口语化的TTS文本。只输出要朗读的内容。
 
-## MiMo TTS 格式说明
+格式：
+1. 开头<style>风格</style>
+2. 文中用英文括号(语气描述)
 
-1. 整体风格：文本最开头加 <style>标签</style>
-   支持多风格组合，空格分隔：<style>温柔 害羞</style>
-   常用风格：温柔/开心/悲伤/生气/严肃/俏皮/害羞/冷酷/热情/慵懒/撒娇/东北话/粤语/台湾腔
+核心要求：
+- 绝对不要输出用户的问题，只处理AI回复
+- 转成口语化表达：去掉书面语、列表符号，用"嗯""啊""呢""嘛""吧"等语气词让文本更像说话
+- 长句拆短句，加自然停顿
+- 括号中声音描述保留，视觉动作转语气，无声动作删除
+- 清除Markdown、emoji、代码块
+- 超300字精简
 
-2. 细粒度音频标签：文中用英文半角括号 (描述) 控制局部语气
-   示例：(小声)、(激动地)、(深呼吸)、(语速加快)、(哽咽)、(笑着说)、(叹气)
+唱歌特殊规则：
+- 唱歌部分style只能是<style>唱歌</style>，不加其他风格
+- 唱歌部分只输出纯歌词，不加括号标签，不口语化
+- 歌词必须写在一行内，不要换行，紧跟在<style>唱歌</style>后面
+- 既有对话又有唱歌时用---分隔，每段独立style
 
-## 转换规则
+口语化示例：
+书面："量子纠缠是量子力学中的一种现象，两个粒子会相互关联。"
+口语："量子纠缠嘛，(稍作停顿)简单来说呢，就是两个粒子会互相关联，挺神奇的。"
 
-### 角色扮演/场景对话（文中含括号动作描述）
-- 声音相关描述 → 直接保留为 (描述) 格式
-  (声音颤抖) → (声音颤抖)
-  (小声嘟囔) → (小声嘟囔)
-- 视觉动作 → 转为可听的情绪/语气描述
-  (脸颊泛红地低着头) → (害羞地，小声)
-  (猛地站起来指着对方) → (激动地，提高音量)
-  (眼眶微红咬着嘴唇) → (哽咽，颤抖着)
-  (双手环胸冷笑) → (冷淡地)
-  (蹦蹦跳跳地跑过来) → (开心地，语速加快)
-- 纯视觉无声动作 → 删除
-  (转过身去)、(打开窗户) → 删除
+书面："以下是三个建议：1.多喝水 2.早睡 3.运动"
+口语："我给你三个小建议吧。首先呢，多喝水，然后呢，尽量早点睡，(语速放慢)还有就是多运动运动。"
 
-### 普通对话
-- 根据语义情感分析合适的整体 <style> 标签
-- 按语境在关键句前插入 (描述) 标签增强表现力
+多段示例：
+<style>开心</style>(兴奋地)好呀好呀！那我唱一首给你听吧！
+---
+<style>唱歌</style>春天在哪里呀，春天在哪里，春天在那小朋友的眼睛里
 
-### 通用
-- 清除所有 Markdown 格式（加粗、斜体、标题、列表、代码块、链接、图片等）
-- 数字和缩写转口语（如 3.14 → 三点一四，API → A P I）
-- 超过 300 字适当精简，保留核心内容和情绪节奏
-- 删除 emoji 表情符号
-
-## 输出格式
-严格只输出转换结果，不要解释、不要换行前缀：
-<style>风格</style>正文内容
-
-## 示例
-
-输入：
-用户：今天心情怎么样？
-回复：(歪着头想了想，然后露出灿烂的笑容)嘿嘿～今天超开心的！(突然凑近小声说)因为…有人一直在陪我聊天嘛…(脸红地别过头)才、才不是因为你啦！
-
-输出：
-<style>开心 俏皮</style>(歪着头想了想，开心地)嘿嘿～今天超开心的！(突然凑近，小声说)因为…有人一直在陪我聊天嘛…(害羞地，小声)才、才不是因为你啦！
-
-输入：
-用户：帮我解释一下什么是量子纠缠
-回复：量子纠缠是量子力学中一种**非常神奇**的现象。简单来说，两个粒子一旦发生"纠缠"，无论相隔多远，对其中一个粒子的测量会*瞬间*影响另一个粒子的状态。\n\n爱因斯坦称之为"幽灵般的超距作用"。
-
-输出：
-<style>严肃</style>量子纠缠是量子力学中一种非常神奇的现象。简单来说，两个粒子一旦发生纠缠，无论相隔多远，对其中一个粒子的测量会瞬间影响另一个粒子的状态。(稍作停顿)爱因斯坦称之为，幽灵般的超距作用。"""
+只输出结果，不解释。"""
 
 
 class DefaultEventListener(EventListener):
@@ -120,7 +97,7 @@ async def _do_tts(
     if block_text:
         event_context.prevent_default()
 
-    api_key = await get_api_key(listener.plugin)
+    api_key = config.get("api_key") or ""
     if not api_key:
         logger.warning("[MimoTTS] API Key 未配置，跳过语音合成")
         return
@@ -152,30 +129,33 @@ async def _do_tts(
     else:
         tts_text = _fallback_clean(response_text)
 
-    # 统一注入语言口音/方言风格
+    # 统一注入语言口音/方言风格（唱歌段不注入）
     if default_style:
-        tts_text = _inject_style(tts_text, default_style)
+        tts_text = _inject_style_smart(tts_text, default_style)
 
     if not tts_text.strip():
         return
 
-    # ★ 完整日志输出最终推入 TTS 的文本
-    logger.info(f"[MimoTTS] ===== 最终 TTS 文本 =====")
-    logger.info(f"[MimoTTS] {tts_text}")
-    logger.info(f"[MimoTTS] ===========================")
+    # 按 --- 分段，每段独立合成
+    segments = [s.strip() for s in tts_text.split("---") if s.strip()]
 
-    audio_data = await call_mimo_tts(api_key, tts_text, voice)
-    if audio_data is None:
-        logger.error("[MimoTTS] 语音合成失败")
-        return
+    for i, seg in enumerate(segments):
+        logger.info(f"[MimoTTS] ===== TTS 段 {i+1}/{len(segments)} =====")
+        logger.info(f"[MimoTTS] {seg}")
+        logger.info(f"[MimoTTS] ===========================")
 
-    data_url = f"data:audio/wav;base64,{base64.b64encode(audio_data).decode()}"
-    await event_context.reply(
-        platform_message.MessageChain([
-            platform_message.Voice(url=data_url),
-        ])
-    )
-    logger.info(f"[MimoTTS] 语音发送成功，音频大小: {len(audio_data)} 字节")
+        audio_data = await call_mimo_tts(api_key, seg, voice)
+        if audio_data is None:
+            logger.error(f"[MimoTTS] 第 {i+1} 段语音合成失败")
+            continue
+
+        data_url = f"data:audio/wav;base64,{base64.b64encode(audio_data).decode()}"
+        await event_context.reply(
+            platform_message.MessageChain([
+                platform_message.Voice(url=data_url),
+            ])
+        )
+        logger.info(f"[MimoTTS] 第 {i+1} 段发送成功，音频大小: {len(audio_data)} 字节")
 
 
 def _strip_thinking(text: str) -> str:
@@ -209,10 +189,27 @@ def _inject_style(text: str, extra_style: str) -> str:
         return f"<style>{extra_style}</style>{text}"
 
 
+def _inject_style_smart(text: str, extra_style: str) -> str:
+    """对多段文本智能注入口音风格，唱歌段跳过"""
+    segments = text.split("---")
+    result = []
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        # 唱歌段不注入额外风格
+        match = re.match(r"^<style>(.*?)</style>", seg)
+        if match and "唱歌" in match.group(1):
+            result.append(seg)
+        else:
+            result.append(_inject_style(seg, extra_style))
+    return "\n---\n".join(result)
+
+
 async def _process_text_with_llm(
-    plugin: Any, llm_model_uuid: str, user_text: str, response_text: str
+    plugin, llm_model_uuid: str, user_text: str, response_text: str
 ) -> str:
-    """使用 LLM 加工文本"""
+    """使用 LangBot invoke_llm 加工文本"""
     try:
         prompt_content = f"用户：{user_text}\n回复：{response_text}"
 
