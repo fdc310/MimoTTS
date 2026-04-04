@@ -43,7 +43,7 @@ async def call_mimo_tts(api_key: str, text: str, voice: str) -> bytes | None:
             audio_b64 = raw.get("audio", {}).get("data")
 
         if not audio_b64:
-            logger.error("[MimoTTS] 响应中未包含音频数据")
+            logger.error(f"[MimoTTS] 响应中未包含音频数据, response: {completion}")
             return None
 
         audio_bytes = base64.b64decode(audio_b64)
