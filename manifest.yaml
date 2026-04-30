@@ -4,7 +4,7 @@ metadata:
   author: Mimotts
   name: MimoTTS
   repository: ''
-  version: 0.1.0
+  version: 0.4.0
   description:
     en_US: 'Text-to-speech synthesis using MiMo TTS API'
     zh_Hans: '调用小米 MiMo TTS 生成语音'
@@ -56,28 +56,98 @@ spec:
         en_US: LLM model for processing response text before TTS (style analysis, text cleanup). Leave empty to skip LLM processing.
         zh_Hans: 用于加工回复文本的 LLM 模型（风格分析、文本清理）。留空则跳过 LLM 加工，直接合成。
       required: false
+    - name: default_model
+      type: select
+      label:
+        en_US: Default Model
+        zh_Hans: 默认模型
+      description:
+        en_US: Default TTS model for speech synthesis
+        zh_Hans: 默认语音合成模型
+      options:
+        - name: mimo-v2.5-tts
+          label:
+            en_US: MiMo V2.5 TTS (Preset Voices)
+            zh_Hans: MiMo V2.5 TTS (预置音色)
+        - name: mimo-v2.5-tts-voicedesign
+          label:
+            en_US: MiMo V2.5 TTS (Voice Design)
+            zh_Hans: MiMo V2.5 TTS (音色设计)
+        - name: mimo-v2.5-tts-voiceclone
+          label:
+            en_US: MiMo V2.5 TTS (Voice Clone)
+            zh_Hans: MiMo V2.5 TTS (音色复刻)
+      default: mimo-v2.5-tts
+      required: false
     - name: default_voice
       type: select
       label:
         en_US: Default Voice
         zh_Hans: 默认音色
       description:
-        en_US: Default voice for speech synthesis
-        zh_Hans: 默认语音合成音色
+        en_US: Default voice for speech synthesis (only for mimo-v2.5-tts model)
+        zh_Hans: 默认语音合成音色（仅 mimo-v2.5-tts 模型使用）
       options:
         - name: mimo_default
           label:
             en_US: MiMo Default
             zh_Hans: MiMo 默认
-        - name: default_zh
+        - name: 冰糖
           label:
-            en_US: Chinese Female
-            zh_Hans: 中文女声
-        - name: default_en
+            en_US: Bingtang (Chinese Female)
+            zh_Hans: 冰糖 (中文女性)
+        - name: 茉莉
           label:
-            en_US: English Female
-            zh_Hans: 英文女声
+            en_US: Moli (Chinese Female)
+            zh_Hans: 茉莉 (中文女性)
+        - name: 苏打
+          label:
+            en_US: Suda (Chinese Male)
+            zh_Hans: 苏打 (中文男性)
+        - name: 白桦
+          label:
+            en_US: Baihua (Chinese Male)
+            zh_Hans: 白桦 (中文男性)
+        - name: Mia
+          label:
+            en_US: Mia (English Female)
+            zh_Hans: Mia (英文女性)
+        - name: Chloe
+          label:
+            en_US: Chloe (English Female)
+            zh_Hans: Chloe (英文女性)
+        - name: Milo
+          label:
+            en_US: Milo (English Male)
+            zh_Hans: Milo (英文男性)
+        - name: Dean
+          label:
+            en_US: Dean (English Male)
+            zh_Hans: Dean (英文男性)
       default: mimo_default
+      required: false
+    - name: default_format
+      type: select
+      label:
+        en_US: Audio Format
+        zh_Hans: 音频格式
+      description:
+        en_US: Audio output format
+        zh_Hans: 音频输出格式
+      options:
+        - name: wav
+          label:
+            en_US: WAV (High Quality)
+            zh_Hans: WAV (高质量)
+        - name: mp3
+          label:
+            en_US: MP3 (Smaller Size)
+            zh_Hans: MP3 (体积小)
+        - name: pcm16
+          label:
+            en_US: PCM16 (Raw)
+            zh_Hans: PCM16 (原始)
+      default: wav
       required: false
     - name: default_style
       type: string
@@ -87,6 +157,190 @@ spec:
       description:
         en_US: 'Voice accent or dialect, will be appended to style tag. e.g.: 东北话, 台湾腔, 四川话, 粤语. Leave empty for none.'
         zh_Hans: '语言口音或方言风格，会追加到 style 标签中。如：东北话、台湾腔、四川话、粤语，留空表示不使用'
+      default: ''
+      required: false
+    - name: cloned_voices
+      type: string
+      label:
+        en_US: Cloned Voices
+        zh_Hans: 克隆音色
+      description:
+        en_US: 'Each line: name=url. Example: Mom=https://example.com/voice.mp3. Supports http/https URLs or data:audio/...;base64,...'
+        zh_Hans: '每行一个：名称=URL。示例：妈妈=https://example.com/voice.mp3。支持 http/https 链接或 data:audio/...;base64,... 格式'
+      default: ''
+      required: false
+    - name: default_director
+      type: select
+      label:
+        en_US: Default Director Template
+        zh_Hans: 默认导演模板
+      description:
+        en_US: Default director template used when no template is specified in command
+        zh_Hans: 命令未指定模板时使用的默认导演模板，留空表示不使用默认值
+      options:
+        - name: 'none'
+          label:
+            en_US: None (Don't use default)
+            zh_Hans: 不使用默认值
+        - name: 冰山美人
+          label:
+            zh_Hans: 冰山美人
+            en_US: Ice Beauty
+        - name: 热血少年
+          label:
+            zh_Hans: 热血少年
+            en_US: Hot-blooded Teen
+        - name: 温柔姐姐
+          label:
+            zh_Hans: 温柔姐姐
+            en_US: Gentle Sister
+        - name: 腹黑反派
+          label:
+            zh_Hans: 腹黑反派
+            en_US: Scheming Villain
+        - name: 天真萝莉
+          label:
+            zh_Hans: 天真萝莉
+            en_US: Innocent Loli
+        - name: 沉稳大叔
+          label:
+            zh_Hans: 沉稳大叔
+            en_US: Calm Uncle
+        - name: 傲娇大小姐
+          label:
+            zh_Hans: 傲娇大小姐
+            en_US: Tsundere Ojou
+        - name: 神秘魔法师
+          label:
+            zh_Hans: 神秘魔法师
+            en_US: Mysterious Mage
+        - name: 忧郁诗人
+          label:
+            zh_Hans: 忧郁诗人
+            en_US: Melancholic Poet
+        - name: 元气偶像
+          label:
+            zh_Hans: 元气偶像
+            en_US: Energetic Idol
+        - name: 铁血将军
+          label:
+            zh_Hans: 铁血将军
+            en_US: Iron General
+        - name: 慈祥奶奶
+          label:
+            zh_Hans: 慈祥奶奶
+            en_US: Kind Grandma
+        - name: 冷艳杀手
+          label:
+            zh_Hans: 冷艳杀手
+            en_US: Cold Killer
+        - name: 阳光暖男
+          label:
+            zh_Hans: 阳光暖男
+            en_US: Sunny Warm Guy
+        - name: 古风仙侠
+          label:
+            zh_Hans: 古风仙侠
+            en_US: Ancient Immortal
+        - name: 暴躁老板
+          label:
+            zh_Hans: 暴躁老板
+            en_US: Grumpy Boss
+        - name: 软萌正太
+          label:
+            zh_Hans: 软萌正太
+            en_US: Cute Shota
+      default: 'none'
+      required: false
+    - name: default_voice_design
+      type: select
+      label:
+        en_US: Default Voice Design Preset
+        zh_Hans: 默认音色设计预设
+      description:
+        en_US: Default voice design preset for mimo-v2.5-tts-voicedesign model
+        zh_Hans: mimo-v2.5-tts-voicedesign 模型的默认音色设计预设，留空表示不使用默认值
+      options:
+        - name: 'none'
+          label:
+            en_US: None (Don't use default)
+            zh_Hans: 不使用默认值
+        - name: 温柔治愈女声
+          label:
+            zh_Hans: 温柔治愈女声
+            en_US: Warm Healing Female
+        - name: 磁性深夜DJ
+          label:
+            zh_Hans: 磁性深夜DJ
+            en_US: Magnetic Late-night DJ
+        - name: 元气少女
+          label:
+            zh_Hans: 元气少女
+            en_US: Energetic Girl
+        - name: 沉稳商务男
+          label:
+            zh_Hans: 沉稳商务男
+            en_US: Steady Businessman
+        - name: 东北大哥
+          label:
+            zh_Hans: 东北大哥
+            en_US: Northeast Big Brother
+        - name: 粤语阿姐
+          label:
+            zh_Hans: 粤语阿姐
+            en_US: Cantonese Auntie
+        - name: 英伦绅士
+          label:
+            zh_Hans: 英伦绅士
+            en_US: British Gentleman
+        - name: 日系慵懒
+          label:
+            zh_Hans: 日系慵懒
+            en_US: Japanese Lazy
+        - name: 老北京评书
+          label:
+            zh_Hans: 老北京评书
+            en_US: Beijing Storyteller
+        - name: 甜美女主播
+          label:
+            zh_Hans: 甜美女主播
+            en_US: Sweet Streamer
+        - name: 沧桑老者
+          label:
+            zh_Hans: 沧桑老者
+            en_US: Weathered Elder
+        - name: 冷酷杀手
+          label:
+            zh_Hans: 冷酷杀手
+            en_US: Cold Assassin
+        - name: 阳光少年
+          label:
+            zh_Hans: 阳光少年
+            en_US: Sunny Boy
+        - name: ASMR助眠
+          label:
+            zh_Hans: ASMR助眠
+            en_US: ASMR Sleep Aid
+      default: 'none'
+      required: false
+    - name: director_templates
+      type: string
+      label:
+        en_US: Custom Director Templates
+        zh_Hans: 自定义导演模板
+      description:
+        en_US: 'Each line: name=role|scene|guide. Example: MyCharacter=A young girl|In a forest|Gentle and soft voice'
+        zh_Hans: '每行一个：名称=角色|场景|指导。示例：我的角色=一个年轻女孩|在森林里|温柔轻柔的声音'
+      default: ''
+      required: false
+    - name: voice_design_presets
+      type: string
+      label:
+        en_US: Custom Voice Design Presets
+        zh_Hans: 自定义音色设计预设
+      description:
+        en_US: 'Each line: name=description. Example: MyVoice=Young woman, warm and gentle voice'
+        zh_Hans: '每行一个：名称=音色描述。示例：我的音色=年轻女性，温柔治愈的嗓音'
       default: ''
       required: false
   components:
